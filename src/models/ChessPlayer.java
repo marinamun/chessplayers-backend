@@ -111,6 +111,17 @@ public ChessPlayer(int id,String name,String nationality,int blitzRating,int rap
     public void setPhoto(String photo) {
         this.photo = photo;
     }
+    public int getId() {
+    return id;
+    }
+    
+    public String toJson() {
+    return String.format(
+        "{\"id\":%d,\"name\":\"%s\",\"nationality\":\"%s\",\"blitzRating\":%d,\"rapidRating\":%d,\"classicalRating\":%d,\"age\":%d,\"favoriteOpening\":\"%s\",\"worldRanking\":%d,\"title\":\"%s\",\"photo\":\"%s\"}",
+        id, name, nationality, blitzRating, rapidRating, classicalRating, age, favoriteOpening, worldRanking, title, photo
+    );
+}
+
 
 
 }
