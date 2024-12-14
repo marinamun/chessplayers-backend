@@ -1,10 +1,17 @@
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.sql.SQLException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import java.util.ArrayList;
 import java.util.List;
 import models.ChessPlayer;
+import src.DatabaseConnection;
 
 
 public class ChessPlayerController implements HttpHandler {
@@ -19,38 +26,72 @@ public class ChessPlayerController implements HttpHandler {
     }
 
     private void getAllChessPlayers(HttpExchange exchange) throws IOException{
-        //HTTP response nees json array(string format). thats why i use stringbuilder.      
-
-        //create the string and start it with a "[" of json array of objects
-        StringBuilder response = new StringBuilder("[");
-        for (ChessPlayer player: chessPlayers){
-            response.append(player.toJson()).append(",");
-        }
-        //little clean up after all players added to our json array, remove last comma
-        if (response.length()<1){
-            response.setLength(response.length()-1);
-        }
-        //close the array with "]"
-        response.append("]");
-
-        //exchange is an instance of httpExchange, connects server and client
-        sendResponse(exchange, 200, response.toString());
-
-    }
-    private void getChessPlayerById(HttpExchange exchange, String path) throws IOException{
-        //get the id from the path/url and make it a number
-        int id = Integer.parseInt(path.substring(path.lastIndexOf("/")+1));
-
-        //find the chessplayer. stream() to search and perform operations. filter, stop at the first match. if no match, null.
-        ChessPlayer player = chessPlayers.stream().filter(p -> p.getId() == id).findFirst().orElse(null);
+        try(Connection connection = DatabaseConnection.getConnection()){
+            var statement = connection.prepareStatement("SELECT * FROM players");
+            var result = statement.executeQuery();
         
-        //handle the result
-        if (player != null){
-            sendResponse(exchange, 200, player.toJson());
-        } else{
-            sendResponse(exchange, 404, "Chess player not found");
+
+            //HTTP response nees json array(string format). thats why i use stringbuilder.      
+            //create the string and start it with a "[" of json array of objects
+            StringBuilder response = new StringBuilder("[");
+            while(result.next()){
+                int id = result.getInt("id");
+                String name = result.getString("name");
+                String nationality = result.getString("nationality");
+                int rating = result.getInt("rating");
+
+                ChessPlayer player = new ChessPlayer(id, name, nationality, rating);
+                response.append(player.toJson()).append(",");
+            }
+        
+            //little clean up after all players added to our json array, remove last comma
+            if (response.length()<1){
+                response.setLength(response.length()-1);
+            }
+            //close the array with "]"
+            response.append("]");
+
+            //exchange is an instance of httpExchange, connects server and client
+            sendResponse(exchange, 200, response.toString());
+        }catch(SQLException e){
+            e.printStackTrace();
+            sendResponse(exchange, 500, "Database connection error");
         }
-    } 
+    }
+            private void getChessPlayerById(HttpExchange exchange, String path) throws IOException {
+            try {
+                int id = Integer.parseInt(path.substring(path.lastIndexOf("/") + 1));
+
+                // connect to mysql. ? is a placeholder for the id value.
+                try (Connection connection = DatabaseConnection.getConnection()) {
+                    String query = "SELECT * FROM players WHERE id = ?";
+                    
+                    try (PreparedStatement statement = connection.prepareStatement(query)) {
+                        statement.setInt(1, id);
+
+                        try (ResultSet result = statement.executeQuery()) {
+                            if (result.next()) {
+                                int playerId = result.getInt("id");
+                                String name = result.getString("name");
+                                String nationality = result.getString("nationality");
+                                int rating = result.getInt("rating");
+
+                                ChessPlayer player = new ChessPlayer(playerId, name, nationality, rating);
+                                sendResponse(exchange, 200, player.toJson());
+                            } else {
+                                sendResponse(exchange, 404, "Chess player not found");
+                            }
+                        }
+                    }
+                }
+            } catch (NumberFormatException e) {
+                sendResponse(exchange, 400, "Invalid player ID");
+            } catch (SQLException e) {
+                e.printStackTrace();
+                sendResponse(exchange, 500, "Database connection error");
+            }
+        }
+
 
     private void sendResponse(HttpExchange exchange, int statusCode, String responseText) throws IOException{
         exchange.sendResponseHeaders(statusCode, responseText.getBytes().length);

@@ -1,0 +1,6 @@
+# Ignore compiled Java class files
+/bin/
+out/
+
+# Sensitive database connection file
+src/DatabaseConnection.class
